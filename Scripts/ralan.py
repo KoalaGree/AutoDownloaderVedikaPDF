@@ -18,7 +18,7 @@ DB_NAME = ''
 path_wkthmltopdf = b'C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe'
 config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
 
-def fetch_identifiers(tanggal1, tanggal2, cookies, folder_name):
+def fetch_identifiers(tanggal1, cookies, folder_name):
     # Connect to the database
     conn = mysql.connector.connect(
         host=DB_HOST,

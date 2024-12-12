@@ -9,7 +9,7 @@ from tkinter import filedialog  # Import filedialog for folder selection
 import mysql.connector
 
 # Database connection parameters
-DB_HOST = '192.168.1.30'
+DB_HOST = ''
 DB_USER = ''
 DB_PASSWORD = ''
 DB_NAME = ''
