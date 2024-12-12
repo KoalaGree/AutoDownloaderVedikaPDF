@@ -8,7 +8,7 @@ git clone https://github.com/KoalaGree/AutoDownloaderVedikaPDF.git
 ```
 Atau
 ```
-curl https://github.com/KoalaGree/AutoDownloaderVedikaPDF.git -o AutoDownloaderVedikaPDF.zip
+curl -LO https://github.com/KoalaGree/AutoDownloaderVedikaPDF/archive/refs/heads/main.zip -o AutoDownloaderVedikaPDF.zip
 ```
 3. Extract AutoDownloaderVedikaPDF.zip 
 4. Jalankan Setup.bat untuk menginstall kebutuhan library python

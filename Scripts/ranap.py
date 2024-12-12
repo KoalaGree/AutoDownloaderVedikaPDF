@@ -18,7 +18,7 @@ DB_NAME = ''
 path_wkthmltopdf = b'C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe'
 config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
 
-def fetch_identifiers(tanggal1, tanggal2, cookies, folder_name):
+def fetch_identifiers(tanggal1, tanggal2):
     # Connect to the database
     conn = mysql.connector.connect(
         host=DB_HOST,
@@ -30,17 +30,26 @@ def fetch_identifiers(tanggal1, tanggal2, cookies, folder_name):
 
     # Fetch identifiers from the database
     query = f"""
-            SELECT
-                mlite_vedika.no_rawat 
-            FROM
-                mlite_vedika,
-                kamar_inap 
-            WHERE
-                mlite_vedika.no_rawat = kamar_inap.no_rawat 
-                AND STATUS = 'Pengajuan' 
-                AND jenis = '1' 
-                AND tgl_keluar LIKE '{tanggal1}%' 
-                AND stts_pulang <> 'Pindah Kamar'
+                        SELECT
+        no_rawat 
+    FROM
+        mlite_vedika 
+    WHERE
+        STATUS = 'Pengajuan' 
+        AND jenis = '1' 
+        AND (
+            no_rkm_medis 
+            OR no_rawat
+        OR nosep ) 
+        AND no_rawat IN (
+        SELECT
+            no_rawat 
+        FROM
+            kamar_inap 
+        WHERE
+            tgl_keluar BETWEEN '{tanggal1}' 
+        AND '{tanggal2}' 
+        AND kamar_inap.stts_pulang LIKE '%%')
     """
     cursor.execute(query)
     results = cursor.fetchall()
@@ -103,6 +112,7 @@ def generate_pdf(no_rawat, cookies, path_folder):
 
 def process_data():
     tanggal1 = entry_tanggal1.get()
+    tanggal2 = entry_tanggal2.get()
     cookies = entry_cookies.get()
     folder_name = entry_folder.get()
 
@@ -144,6 +154,9 @@ Label(app, text="Input Tanggal Awal:").pack(pady=5)
 entry_tanggal1 = Entry(app)
 entry_tanggal1.pack(pady=5)
 
+Label(app, text="Input Tanggal Akhir:").pack(pady=5)
+entry_tanggal2 = Entry(app)
+entry_tanggal2.pack(pady=5)
 
 Label(app, text="Pastekan Cookies:").pack(pady=5)
 entry_cookies = Entry(app)

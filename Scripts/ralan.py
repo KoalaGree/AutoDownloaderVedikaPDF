@@ -32,7 +32,7 @@ def fetch_identifiers(tanggal1, cookies, folder_name):
     query = f"""
         SELECT mlite_vedika.no_rawat 
         FROM mlite_vedika 
-        WHERE mlite_vedika.tgl_registrasi LIKE '{tanggal1}%'
+        WHERE mlite_vedika.tgl_registrasi LIKE '{tanggal1}'
         AND jenis = '2'
         AND mlite_vedika.status = 'Pengajuan'
     """
