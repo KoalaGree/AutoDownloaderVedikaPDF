@@ -5,20 +5,20 @@ import re
 from bs4 import BeautifulSoup
 import pdfkit
 from tkinter import Tk, Label, Entry, Button, messagebox
-from tkinter import filedialog  # Import filedialog for folder selection
+from tkinter import filedialog
 import mysql.connector
 
 # Database connection parameters
-DB_HOST = ''
-DB_USER = ''
-DB_PASSWORD = ''
-DB_NAME = ''
+DB_HOST = 'your_db_host'
+DB_USER = 'your_db_user'
+DB_PASSWORD = 'your_db_password'
+DB_NAME = 'your_db_name'
 
 # PDF configuration
-path_wkthmltopdf = b'C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe'
+path_wkthmltopdf = 'C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe'
 config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
 
-def fetch_identifiers(tanggal1, tanggal2):
+def fetch_identifiers(tanggal1):
     # Connect to the database
     conn = mysql.connector.connect(
         host=DB_HOST,
@@ -30,26 +30,16 @@ def fetch_identifiers(tanggal1, tanggal2):
 
     # Fetch identifiers from the database
     query = f"""
-                        SELECT
-        no_rawat 
-    FROM
-        mlite_vedika 
-    WHERE
-        STATUS = 'Pengajuan' 
-        AND jenis = '1' 
-        AND (
-            no_rkm_medis 
-            OR no_rawat
-        OR nosep ) 
-        AND no_rawat IN (
         SELECT
-            no_rawat 
+            mlite_vedika.no_rawat 
         FROM
-            kamar_inap 
+            mlite_vedika
+            JOIN kamar_inap ON mlite_vedika.no_rawat = kamar_inap.no_rawat 
         WHERE
-            tgl_keluar BETWEEN '{tanggal1}' 
-        AND '{tanggal2}' 
-        AND kamar_inap.stts_pulang LIKE '%%')
+            mlite_vedika.jenis = '1' 
+            AND mlite_vedika.`status` = 'Pengajuan' 
+            AND kamar_inap.tgl_keluar LIKE '{tanggal1}' 
+            AND kamar_inap.stts_pulang NOT LIKE '%Pindah%'
     """
     cursor.execute(query)
     results = cursor.fetchall()
@@ -60,21 +50,21 @@ def fetch_identifiers(tanggal1, tanggal2):
 def generate_pdf(no_rawat, cookies, path_folder):
     try:
         modified_string = no_rawat.replace("/", "")
-        url = "http://url.com/admin/vedika/pdf/{}".format(modified_string)
+        url = f"http://url.com/admin/vedika/pdf/{modified_string}"
 
         payload = 'username=&password=&login='
         headers = {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Cache-Control': 'max-age=0',
-                'Connection': 'keep-alive',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Cookie': cookies,
-                'DNT': '1',
-                'Origin': 'http://url.com',
-                'Referer': 'http://url.com/',
-                'Upgrade-Insecure-Requests': '1',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Cache-Control': 'max-age=0',
+            'Connection': 'keep-alive',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': cookies,
+            'DNT': '1',
+            'Origin': 'http://url.com',
+            'Referer': 'http://url.com/',
+            'Upgrade-Insecure-Requests': '1',
+            'User -Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
         }
 
         response = requests.post(url, headers=headers, data=payload)
@@ -112,7 +102,6 @@ def generate_pdf(no_rawat, cookies, path_folder):
 
 def process_data():
     tanggal1 = entry_tanggal1.get()
-    tanggal2 = entry_tanggal2.get()
     cookies = entry_cookies.get()
     folder_name = entry_folder.get()
 
@@ -121,7 +110,7 @@ def process_data():
     if not os.path.exists(path_folder):
         os.makedirs(path_folder)
 
-    results = fetch_identifiers(tanggal1, cookies, folder_name)
+    results = fetch_identifiers(tanggal1)
 
     if not results:
         messagebox.showinfo("Info", "No records found for the given date range.")
@@ -144,25 +133,30 @@ def select_folder():
         entry_folder.delete(0, 'end')  # Clear the current entry
         entry_folder.insert(0, folder_selected)  # Insert the selected folder path
 
+def open_file_dialog():
+    file_path = filedialog.askopenfilename(title="Select a File", filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+    if file_path:
+        with open(file_path, 'r') as file:
+            content = file.read()
+            entry_cookies.insert(0, content)
+
 # Create the main application window
 app = Tk()
 app.title("PDF Generator")
 app.geometry("400x400")
 
 # Create and place labels and entry fields
-Label(app, text="Input Tanggal Awal:").pack(pady=5)
+Label(app, text="Input Tanggal :").pack(pady=5)
 entry_tanggal1 = Entry(app)
 entry_tanggal1.pack(pady=5)
 
-Label(app, text="Input Tanggal Akhir:").pack(pady=5)
-entry_tanggal2 = Entry(app)
-entry_tanggal2.pack(pady=5)
-
-Label(app, text="Pastekan Cookies:").pack(pady=5)
+Label(app, text="Masukkan Cookies:").pack(pady=5)
 entry_cookies = Entry(app)
 entry_cookies.pack(pady=5)
+button_select_file = Button(app, text="Load Cookies", command=open_file_dialog)
+button_select_file.pack(pady=5)
 
-Label(app, text="Pilih Folder:").pack(pady=5)  # Updated label text
+Label(app, text="Pilih Folder:").pack(pady=5)
 entry_folder = Entry(app)
 entry_folder.pack(pady=5)
 
