@@ -18,6 +18,12 @@ def run_ralan():
     except ImportError:
         messagebox.showerror("Error", "Failed to import ralan. Please check if the module exists.")
 
+def run_Auth():
+    try:
+        from Scripts import auth
+    except ImportError:
+        messagebox.showerror("Error", "Failed to import Auth. Please Check if the module exists")
+
 # Create the main window
 root = tk.Tk()
 root.title("Job Tools")
@@ -32,6 +38,9 @@ button_ranap = tk.Button(root, text="Ranap", command=run_ranap)
 button_ranap.pack(pady=5)
 
 button_ralan = tk.Button(root, text="Ralan", command=run_ralan)
+button_ralan.pack(pady=5)
+
+button_ralan = tk.Button(root, text="Get Cookies", command=run_Auth)
 button_ralan.pack(pady=5)
 
 # Start the GUI event loop
