@@ -1,0 +1,8 @@
+cookie.txt
+Scripts/__pycache__
+1
+cookies.js
+Scripts/node_modules
+package-lock.json
+package.json
+launch.json

@@ -1,0 +1,5 @@
+beautifulsoup4
+requests
+pdfkit
+mysql-connector-python
+tk
