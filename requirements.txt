@@ -3,3 +3,4 @@ requests
 pdfkit
 mysql-connector-python
 tk
+requests-toolbelt
