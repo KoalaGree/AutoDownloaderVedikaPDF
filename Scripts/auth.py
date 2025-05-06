@@ -71,20 +71,3 @@ def process():
             messagebox.showerror("Error", cookies)
     except Exception as e:
         messagebox.showerror("Error", str(e))
-
-app = Tk()
-app.title("Get Login Cookies")
-app.geometry("400x400")
-
-Label(app, text="Username").pack(pady=5)
-entry_username = Entry(app)
-entry_username.pack(pady=5)
-
-Label(app, text="Password").pack(pady=5)
-entry_password = Entry(app, show='*')
-entry_password.pack(pady=5)
-
-button_submit = Button(app, text="Get Cookies", command=process)
-button_submit.pack(pady=20)
-
-app.mainloop()

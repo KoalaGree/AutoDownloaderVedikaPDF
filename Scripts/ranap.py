@@ -9,6 +9,8 @@ from urllib.parse import quote_plus
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from requests_toolbelt.multipart.encoder import MultipartEncoder
+from Scripts import auth  
+
 
 
 # Database connection parameters
@@ -324,6 +326,17 @@ def process_files():
             upload_file(session, session.headers, pdf_path, remote_folder)
     messagebox.showinfo("Selesai", "Semua file telah diproses dan diupload.")
 
+def ambil_cookies():
+    username = entry_username.get()
+    password = entry_password.get()
+    cookies = auth.auth(username, password)
+    if cookies:
+        entry_cookies.delete(0, 'end')
+        entry_cookies.insert(0, cookies)
+        messagebox.showinfo("Cookies", f"Cookies berhasil diambil:\n{cookies}")
+    else:
+        messagebox.showerror("Gagal", "Gagal mengambil cookies.")
+
 
 app = Tk()
 app.title("PDF Generator dan Upload")
@@ -337,7 +350,7 @@ Label(app, text="Tanggal Akhir:").grid(row=1, column=0, sticky='e')
 entry_tanggal2 = Entry(app)
 entry_tanggal2.grid(row=1, column=1)
 
-Label(app, text="Username RS:").grid(row=2, column=0, sticky='e')
+Label(app, text="Username RS: ").grid(row=2, column=0, sticky='e')
 entry_username = Entry(app)
 entry_username.grid(row=2, column=1)
 
@@ -347,7 +360,7 @@ entry_password.grid(row=3, column=1)
 
 Label(app, text="Username Drive:").grid(row=4, column=0, sticky='e')
 entry_usernamejkn = Entry(app)
-entry_username.grid(row=4, column=1)
+entry_usernamejkn.grid(row=4, column=1)
 
 Label(app, text="Password Drive:").grid(row=5, column=0, sticky='e')
 entry_passwordjkn = Entry(app, show='*')
@@ -362,7 +375,9 @@ Label(app, text="Cookies File:").grid(row=7, column=0, sticky='e')
 entry_cookies = Entry(app)
 entry_cookies.grid(row=7, column=1)
 Button(app, text="Pilih Cookies", command=select_cookies).grid(row=7, column=2)
+Button(app, text="Ambil Cookies", command=ambil_cookies).grid(row=7, column=3)
 
 Button(app, text="Proses", command=process_files).grid(row=8, column=1, pady=20)
+
 
 app.mainloop()

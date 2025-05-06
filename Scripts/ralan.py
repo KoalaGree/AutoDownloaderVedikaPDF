@@ -1,13 +1,17 @@
-import requests
 import os
-import threading
+import requests
 import re
 from bs4 import BeautifulSoup
 import pdfkit
-from tkinter import Tk, Label, Entry, Button, messagebox
-from tkinter import filedialog  # Import filedialog for folder selection
-from tkinter import Frame
+from tkinter import Tk, Label, Entry, Button, filedialog, messagebox, simpledialog, Listbox, Scrollbar, Toplevel
 import mysql.connector
+from urllib.parse import quote_plus
+from datetime import datetime, timezone
+import xml.etree.ElementTree as ET
+from requests_toolbelt.multipart.encoder import MultipartEncoder
+from Scripts import auth  
+
+
 
 # Database connection parameters
 DB_HOST = ''
@@ -15,27 +19,136 @@ DB_USER = ''
 DB_PASSWORD = ''
 DB_NAME = ''
 
+# JKN Drive login parameters
+url = "https://jkn-drive.bpjs-kesehatan.go.id"
+
+
 # PDF configuration
 path_wkthmltopdf = b'C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe'
 config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
 
-def fetch_identifiers(tanggal1):
-    # Connect to the database
-    conn = mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME
-    )
-    cursor = conn.cursor()
+def get_epochtimes():
+    return int(datetime.now().timestamp())
 
-    # Fetch identifiers from the database
+def login_guest(session, usernameJKN, passwordJKN, headers):
+    epoch = get_epochtimes()
+    endpoint = f"{url}/core/loginguest?time={epoch}"
+    payload = f"userid={usernameJKN}&password={passwordJKN}&passwordType=password&g-recaptcha-response=&tfa=1"
+    response = session.post(endpoint, headers=headers, data=payload)
+    if response.status_code == 200:
+        try:
+            root = ET.fromstring(response.text)
+            message = root.find('.//message')
+            return message.text if message is not None else None
+        except ET.ParseError as e:
+            print(f"[XML ERROR] {e}")
+    else:
+        print(f"[HTTP ERROR] {response.status_code}")
+    return None
+
+def login_2fa(session, usernameJKN, token_message, token_2fa, headers):
+    epoch = get_epochtimes()
+    endpoint = f"{url}/core/2falogin?time={epoch}"
+    payload = f"userid={usernameJKN}&code={token_2fa}&token={token_message}&tfa=1"
+    response = session.post(endpoint, headers=headers, data=payload)
+    if response.status_code == 200:
+        try:
+            root = ET.fromstring(response.text)
+            result = root.find('.//result')
+            return result.text == '1'
+        except ET.ParseError as e:
+            print(f"[XML ERROR] {e}")
+    else:
+        print(f"[HTTP ERROR] {response.status_code}")
+    return False
+
+def get_sharedfolder(session, path, headers):
+    epoch = get_epochtimes()
+    endpoint = f"{url}/core/getfilelist?time={epoch}"
+    payload = f"path={path}&start=0&limit=100"
+    response = session.post(endpoint, headers=headers, data=payload)
+    entries = []
+    if response.status_code == 200:
+        try:
+            root = ET.fromstring(response.text)
+            for entry in root.findall('.//entry'):
+                if entry.find('type').text == 'dir':
+                    entries.append({
+                        'name': entry.find('name').text,
+                        'path': entry.find('path').text
+                    })
+        except ET.ParseError as e:
+            print(f"[XML ERROR] {e}")
+    return entries
+
+
+def select_remote_folder(session, headers, base_path="/SHARED/indri.wahyuningsih/UPLOAD_1f1y/RSU BUNDA"):
+    def on_select(event):
+        selected_index = listbox.curselection()
+        if selected_index:
+            selected = folder_entries[selected_index[0]]
+            new_path = selected['path']
+            refresh_folder(new_path)
+
+    def refresh_folder(current_path_val):
+        nonlocal current_path, folder_entries
+        folder_entries = get_sharedfolder(session, current_path_val, headers)
+        current_path = current_path_val
+        listbox.delete(0, 'end')
+        for folder in folder_entries:
+            listbox.insert('end', folder['name'])
+
+    selected_path = None
+    current_path = base_path
+    folder_entries = []
+
+    # Create window for folder selection
+    win = Toplevel(app)
+    win.title("Pilih Folder Upload")
+
+    def go_back():
+        nonlocal current_path
+        if current_path.strip('/') != base_path.strip('/'):
+            parent = '/'.join(current_path.strip('/').split('/')[:-1])
+            parent_path = f'/{parent}/' if parent else base_path
+            refresh_folder(parent_path)
+
+    def choose_folder():
+        nonlocal selected_path
+        selected_path = current_path
+        win.destroy()
+
+    # Navigation Buttons
+    Button(win, text="Kembali", command=go_back).pack(pady=5)
+
+    scrollbar = Scrollbar(win)
+    scrollbar.pack(side='right', fill='y')
+
+    listbox = Listbox(win, yscrollcommand=scrollbar.set, width=50)
+    listbox.pack()
+    scrollbar.config(command=listbox.yview)
+
+    # Double-click event binding
+    listbox.bind("<Double-1>", on_select)
+
+    Button(win, text="Pilih Folder Ini", command=choose_folder).pack(pady=5)
+
+    # Load folder at the current path
+    refresh_folder(current_path)
+    win.wait_window()
+
+    return selected_path
+
+
+def fetch_identifiers(tanggal1):
+    conn = mysql.connector.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+    cursor = conn.cursor()
     query = f"""
         SELECT mlite_vedika.no_rawat 
-        FROM mlite_vedika 
-        WHERE mlite_vedika.tgl_registrasi LIKE '{tanggal1}'
-        AND jenis = '2'
-        AND mlite_vedika.status = 'Pengajuan'
+                FROM mlite_vedika 
+                WHERE mlite_vedika.tgl_registrasi LIKE '{tanggal1}'
+                AND jenis = '2'
+                AND mlite_vedika.status = 'Pengajuan'
     """
     cursor.execute(query)
     results = cursor.fetchall()
@@ -46,7 +159,7 @@ def fetch_identifiers(tanggal1):
 def generate_pdf(username, password, no_rawat, cookies, path_folder):
     try:
         modified_string = no_rawat.replace("/", "")
-        url = "http://192.168.1.50/admin/vedika/pdf/{}".format(modified_string)
+        url = f"http://192.168.1.50/admin/vedika/pdf/{modified_string}"
 
         payload = f'username={username}&password={password}&login='
         headers = {
@@ -82,10 +195,12 @@ def generate_pdf(username, password, no_rawat, cookies, path_folder):
 
                 if no_sep_value:
                     pdf_filename = f'{no_sep_value}.pdf'
-                    pdf_path = os.path.join(path_folder, pdf_filename)
+                    pdf_path = os.path.normpath(os.path.join(path_folder, pdf_filename))
+                    path_new = pdf_path.replace("\\", "/")
 
+                    # Generate PDF
                     pdfkit.from_string(response.text, pdf_path, configuration=config)
-                    return f'File {pdf_filename} berhasil diunduh'
+                    return path_new
                 else:
                     return f"No.SEP tidak ditemukan di {url}"
             else:
@@ -95,90 +210,172 @@ def generate_pdf(username, password, no_rawat, cookies, path_folder):
     except Exception as e:
         return f'An error occurred: {e}'
 
-def process_data():
-    tanggal1 = entry_tanggal1.get()
-    cookies = entry_cookies.get()
-    username = entry_username.get()
-    password = entry_password.get()
+def upload_file(session, headers, pdf_path, remote_path):
+    try:
+        with open(pdf_path, 'rb') as f:
+            filename = os.path.basename(pdf_path)
+            size = os.path.getsize(pdf_path)
+            print(size)
+            encoded_path = quote_plus(str(remote_path))
+            print 
+            encoded_filename = quote_plus(str(filename))
+            current_time_iso = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
-    folder_name = entry_folder.get()
+            endpoint = (
+                f"{url}/core/upload"
+                f"?appname=explorer"
+                f"&filesize={size}"
+                f"&path={encoded_path}"
+                f"&uploadpath="
+                f"&offset=0"
+                f"&date={current_time_iso}"
+                f"&filename={encoded_filename}"
+                f"&complete=1"
+            )
 
-    path_folder = os.path.join(os.getcwd(), folder_name)
-    if cookies:
-        try:
-            with open(cookies, 'r') as File:
-                cookies_content = File.read
-                if isinstance(cookies_content, str):
-                    cookies_content = cookies_content.strip()
-                    entry_cookies.delete(0, 'end')
-                    entry_cookies.insert(0, cookies_content) 
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to read the .txt file: {e}")
-            return
-    if not os.path.exists(path_folder):
-        os.makedirs(path_folder)
+            m = MultipartEncoder(
+                fields={'filedata': (filename, f, "application/pdf")},
+                boundary="----WebKitFormBoundarymZWe6678TZzxezEy"
+            )
 
-    results = fetch_identifiers(tanggal1)
+            upload_headers = headers.copy()
+            upload_headers['Content-Type'] = m.content_type
+            upload_headers['Referer'] = "https://jkn-drive.bpjs-kesehatan.go.id/ui/core/js/9858.2fe9443a.js"
+            upload_headers['Accept'] = "application/json"
 
-    if not results:
-        messagebox.showinfo("Info", "No records found for the given date range.")
-        return
+            response = session.post(endpoint, headers=upload_headers, data=m)
+            if response.status_code == 200:
+                print(f"[SUKSES] Upload: {filename}")
+            else:
+                print(f"[GAGAL] Upload: {filename} - Status: {response.status_code}")
+    except Exception as e:
+        print(f"[UPLOAD ERROR] {e}")
 
-    def worker():
-        for result in results:
-            no_rawat = result[0]
-            message = generate_pdf(username, password, no_rawat, cookies, path_folder)
-            print(message)
-        quit
-        messagebox.showinfo("Info", "All PDFs have been processed.")
 
-    threading.Thread(target=worker).start()
-
-def select_folder():
-    folder_selected = filedialog.askdirectory()
-    if folder_selected:
-        entry_folder.delete(0, 'end')
-        entry_folder.insert(0, folder_selected)
 def select_cookies():
     file_selected = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
     if file_selected:
         entry_cookies.delete(0, 'end')
         entry_cookies.insert(0, file_selected)
 
+def preload_js_assets(session):
+    js1 = "https://jkn-drive.bpjs-kesehatan.go.id/ui/core/js/9858.2fe9443a.js"
+    js2 = "https://jkn-drive.bpjs-kesehatan.go.id/ui/core/js/1971.022938ab.js"
+
+    headers_js = {
+        'Accept': '*/*',
+        'User-Agent': session.headers['user-agent'],
+        'Referer': js1,
+    }
+
+    try:
+        r1 = session.get(js1, headers=headers_js)
+        r2 = session.get(js2, headers=headers_js)
+        print(f"[INFO] JS preload status: {r1.status_code}, {r2.status_code}")
+    except Exception as e:
+        print(f"[ERROR] Gagal preload JS: {e}")
+
+
+
+def ambil_cookies():
+    username = entry_username.get()
+    password = entry_password.get()
+    cookies = auth.auth(username, password)
+    if cookies:
+        entry_cookies.delete(0, 'end')
+        entry_cookies.insert(0, cookies)
+        messagebox.showinfo("Cookies", f"Cookies berhasil diambil:\n{cookies}")
+    else:
+        messagebox.showerror("Gagal", "Gagal mengambil cookies.")
+
+
+
+def process_files():
+    tanggal1 = entry_tanggal1.get()
+    username = entry_username.get()
+    password = entry_password.get()
+    usernameJKN = entry_usernamejkn.get()
+    passwordJKN = entry_passwordjkn.get()
+    cookies = entry_cookies.get()
+    folder_pdf = entry_folder.get()
+
+    if not os.path.exists(folder_pdf):
+        os.makedirs(folder_pdf)
+
+    identifiers = fetch_identifiers(tanggal1)
+    if not identifiers:
+        messagebox.showerror("Error", "Tanggal awal dan tanggal akhir harus diisi.")
+        return
+
+    session = requests.Session()
+    session.headers.update({
+        'accept': 'application/x-www-form-urlencoded',
+        'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+        'content-type': 'application/x-www-form-urlencoded',
+        'origin': 'https://jkn-drive.bpjs-kesehatan.go.id',
+        'referer': 'https://jkn-drive.bpjs-kesehatan.go.id/ui/core/index.html',
+        'sec-ch-ua': '"Google Chrome";v="135", "Not-A.Brand";v="8", "Chromium";v="135"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36',
+        'x-requested-with': 'XMLHttpRequest',
+        'X-XSRF-TOKEN': 'NONE'
+    })
+
+    token_message = login_guest(session, usernameJKN, passwordJKN, session.headers)
+    token_2fa = simpledialog.askstring("2FA", "Masukkan kode 2FA:")
+    if not login_2fa(session, usernameJKN, token_message, token_2fa, session.headers):
+        messagebox.showerror("Error", "Login 2FA gagal.")
+        return
+
+    remote_folder = select_remote_folder(session, session.headers) 
+    for (no_rawat,) in identifiers:
+        pdf_path = generate_pdf(username, password, no_rawat, cookies, folder_pdf)
+        if pdf_path:
+            preload_js_assets(session)
+            upload_file(session, session.headers, pdf_path, remote_folder)
+    messagebox.showinfo("Selesai", "Semua file telah diproses dan diupload.")
+
 
 app = Tk()
-app.title("PDF Generator")
-app.geometry("500x200")
+app.title("PDF Generator dan Upload")
+app.geometry("500x400")
 
-
-Label(app, text="Input Tanggal Awal:").grid(row=0, column=0, pady=5, sticky='e')
+Label(app, text="Tanggal Awal:").grid(row=0, column=0, sticky='e')
 entry_tanggal1 = Entry(app)
-entry_tanggal1.grid(row=0, column=1, pady=5)
+entry_tanggal1.grid(row=0, column=1)
 
-Label(app, text="Pastekan Cookies:").grid(row=1, column=0, pady=5, sticky='e')
-entry_cookies = Entry(app)
-entry_cookies.grid(row=1, column=1, pady=5)
-
-button_select_folder2 = Button(app, text="Browse", command=select_cookies)
-button_select_folder2.grid(row=1, column=2, padx=5)
-
-
-Label(app, text="Pilih Folder:").grid(row=2, column=0, pady=5, sticky='e')
-entry_folder = Entry(app)
-entry_folder.grid(row=2, column=1, pady=5)
-
-button_select_folder = Button(app, text="Browse", command=select_folder)
-button_select_folder.grid(row=2, column=2, padx=5)
-
-Label(app, text="Username:").grid(row=3, column=0, pady=5, sticky='e')
+Label(app, text="Username RS:").grid(row=2, column=0, sticky='e')
 entry_username = Entry(app)
-entry_username.grid(row=3, column=1, pady=5)
+entry_username.grid(row=2, column=1)
 
-Label(app, text="Password:").grid(row=4, column=0, pady=5, sticky='e')
+Label(app, text="Password RS:").grid(row=3, column=0, sticky='e')
 entry_password = Entry(app, show='*')
-entry_password.grid(row=4, column=1, pady=5)
+entry_password.grid(row=3, column=1)
 
-button_submit = Button(app, text="Generate PDFs", command=process_data)
-button_submit.grid(row=5, column=0, columnspan=3, pady=20)
+Label(app, text="Username Drive:").grid(row=4, column=0, sticky='e')
+entry_usernamejkn = Entry(app)
+entry_usernamejkn.grid(row=4, column=1)
+
+Label(app, text="Password Drive:").grid(row=5, column=0, sticky='e')
+entry_passwordjkn = Entry(app, show='*')
+entry_passwordjkn.grid(row=5, column=1)
+
+Label(app, text="Folder Simpan PDF:").grid(row=6, column=0, sticky='e')
+entry_folder = Entry(app)
+entry_folder.grid(row=6, column=1)
+Button(app, text="Pilih Folder", command=lambda: entry_folder.insert(0, filedialog.askdirectory())).grid(row=6, column=2)
+
+Label(app, text="Cookies File:").grid(row=7, column=0, sticky='e')
+entry_cookies = Entry(app)
+entry_cookies.grid(row=7, column=1)
+Button(app, text="Pilih Cookies", command=select_cookies).grid(row=7, column=2)
+Button(app, text="Ambil Cookies", command=ambil_cookies).grid(row=7, column=3)
+
+
+Button(app, text="Proses", command=process_files).grid(row=8, column=1, pady=20)
 
 app.mainloop()
