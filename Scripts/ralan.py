@@ -1,3 +1,8 @@
+# This file is part of AutoDownloaderVedikaPDF.
+# Copyright (C) 2025 Andy Cahyono Putra
+# This program is distributed under the Aladdin Free Public License.
+# See LICENSE file for more information.
+
 import os
 import requests
 import re
@@ -10,29 +15,20 @@ from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 from Scripts import auth  
+from config_loader import Config
+import pyttsx3
 
 
 
-# Database connection parameters
-DB_HOST = ''
-DB_USER = ''
-DB_PASSWORD = ''
-DB_NAME = ''
-
-# JKN Drive login parameters
-url = "https://jkn-drive.bpjs-kesehatan.go.id"
-
-
-# PDF configuration
-path_wkthmltopdf = b'C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe'
-config = pdfkit.configuration(wkhtmltopdf=path_wkthmltopdf)
+cfg = Config()
+config = pdfkit.configuration(wkhtmltopdf=cfg.Paths.wkhtmlfolder)
 
 def get_epochtimes():
     return int(datetime.now().timestamp())
 
 def login_guest(session, usernameJKN, passwordJKN, headers):
     epoch = get_epochtimes()
-    endpoint = f"{url}/core/loginguest?time={epoch}"
+    endpoint = f"{cfg.Url.jkn}/core/loginguest?time={epoch}"
     payload = f"userid={usernameJKN}&password={passwordJKN}&passwordType=password&g-recaptcha-response=&tfa=1"
     response = session.post(endpoint, headers=headers, data=payload)
     if response.status_code == 200:
@@ -48,7 +44,7 @@ def login_guest(session, usernameJKN, passwordJKN, headers):
 
 def login_2fa(session, usernameJKN, token_message, token_2fa, headers):
     epoch = get_epochtimes()
-    endpoint = f"{url}/core/2falogin?time={epoch}"
+    endpoint = f"{cfg.Url.jkn}/core/2falogin?time={epoch}"
     payload = f"userid={usernameJKN}&code={token_2fa}&token={token_message}&tfa=1"
     response = session.post(endpoint, headers=headers, data=payload)
     if response.status_code == 200:
@@ -64,7 +60,7 @@ def login_2fa(session, usernameJKN, token_message, token_2fa, headers):
 
 def get_sharedfolder(session, path, headers):
     epoch = get_epochtimes()
-    endpoint = f"{url}/core/getfilelist?time={epoch}"
+    endpoint = f"{cfg.Url.jkn}/core/getfilelist?time={epoch}"
     payload = f"path={path}&start=0&limit=100"
     response = session.post(endpoint, headers=headers, data=payload)
     entries = []
@@ -82,7 +78,31 @@ def get_sharedfolder(session, path, headers):
     return entries
 
 
-def select_remote_folder(session, headers, base_path="/SHARED/indri.wahyuningsih/UPLOAD_1f1y/RSU BUNDA"):
+def create_folder(session, headers, parent_path, new_folder_name):
+    try:
+        epoch = get_epochtimes()
+        endpoint = f"{cfg.Url.jkn}/core/createfolder?time={epoch}"
+        
+        payload = {
+            "name": new_folder_name,
+            "path": parent_path,
+            "date": datetime.now().isoformat()
+        }
+
+        response = session.post(endpoint, headers=headers, data=payload)
+        
+        if response.status_code == 200:
+            print(f"[INFO] Folder '{new_folder_name}' berhasil dibuat di {parent_path}")
+            return True
+        else:
+            print(f"[ERROR] Gagal membuat folder '{new_folder_name}' - Status: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"[ERROR] Terjadi kesalahan saat membuat folder: {e}")
+        return False
+
+
+def select_remote_folder(session, headers, base_path=cfg.Paths.base_path):
     def on_select(event):
         selected_index = listbox.curselection()
         if selected_index:
@@ -97,6 +117,12 @@ def select_remote_folder(session, headers, base_path="/SHARED/indri.wahyuningsih
         listbox.delete(0, 'end')
         for folder in folder_entries:
             listbox.insert('end', folder['name'])
+
+    def create_new_folder():
+        new_folder_name = simpledialog.askstring("Nama Folder", "Masukkan nama folder baru:")
+        if new_folder_name:
+            if create_folder(session, headers, current_path, new_folder_name):
+                refresh_folder(current_path)
 
     selected_path = None
     current_path = base_path
@@ -133,6 +159,9 @@ def select_remote_folder(session, headers, base_path="/SHARED/indri.wahyuningsih
 
     Button(win, text="Pilih Folder Ini", command=choose_folder).pack(pady=5)
 
+    # Button to create new folder
+    Button(win, text="Buat Folder Baru", command=create_new_folder).pack(pady=5)
+
     # Load folder at the current path
     refresh_folder(current_path)
     win.wait_window()
@@ -141,7 +170,7 @@ def select_remote_folder(session, headers, base_path="/SHARED/indri.wahyuningsih
 
 
 def fetch_identifiers(tanggal1):
-    conn = mysql.connector.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+    conn = mysql.connector.connect(host=cfg.Database.host, user=cfg.Database.user, password=cfg.Database.password, database=cfg.Database.database)
     cursor = conn.cursor()
     query = f"""
         SELECT mlite_vedika.no_rawat 
@@ -159,7 +188,7 @@ def fetch_identifiers(tanggal1):
 def generate_pdf(username, password, no_rawat, cookies, path_folder):
     try:
         modified_string = no_rawat.replace("/", "")
-        url = f"http://192.168.1.50/admin/vedika/pdf/{modified_string}"
+        url = f'{cfg.Url.mlite}/admin/vedika/pdf/{modified_string}'
 
         payload = f'username={username}&password={password}&login='
         headers = {
@@ -170,8 +199,8 @@ def generate_pdf(username, password, no_rawat, cookies, path_folder):
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Cookie': cookies,
                 'DNT': '1',
-                'Origin': 'http://192.168.1.50',
-                'Referer': 'http://192.168.1.50/',
+                'Origin': cfg.Url.mlite,
+                'Referer': cfg.Url.mlite,
                 'Upgrade-Insecure-Requests': '1',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
         }
@@ -222,7 +251,7 @@ def upload_file(session, headers, pdf_path, remote_path):
             current_time_iso = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
             endpoint = (
-                f"{url}/core/upload"
+                f"{cfg.Url.jkn}/core/upload"
                 f"?appname=explorer"
                 f"&filesize={size}"
                 f"&path={encoded_path}"
@@ -240,7 +269,7 @@ def upload_file(session, headers, pdf_path, remote_path):
 
             upload_headers = headers.copy()
             upload_headers['Content-Type'] = m.content_type
-            upload_headers['Referer'] = "https://jkn-drive.bpjs-kesehatan.go.id/ui/core/js/9858.2fe9443a.js"
+            upload_headers['Referer'] = f'{cfg.Url.jkn}/ui/core/js/9858.2fe9443a.js'
             upload_headers['Accept'] = "application/json"
 
             response = session.post(endpoint, headers=upload_headers, data=m)
@@ -259,8 +288,8 @@ def select_cookies():
         entry_cookies.insert(0, file_selected)
 
 def preload_js_assets(session):
-    js1 = "https://jkn-drive.bpjs-kesehatan.go.id/ui/core/js/9858.2fe9443a.js"
-    js2 = "https://jkn-drive.bpjs-kesehatan.go.id/ui/core/js/1971.022938ab.js"
+    js1 = f'{cfg.Url.jkn}/ui/core/js/9858.2fe9443a.js'
+    js2 = f'{cfg.Url.jkn}/ui/core/js/1971.022938ab.js'
 
     headers_js = {
         'Accept': '*/*',
@@ -276,7 +305,6 @@ def preload_js_assets(session):
         print(f"[ERROR] Gagal preload JS: {e}")
 
 
-
 def ambil_cookies():
     username = entry_username.get()
     password = entry_password.get()
@@ -288,7 +316,19 @@ def ambil_cookies():
     else:
         messagebox.showerror("Gagal", "Gagal mengambil cookies.")
 
-
+def play_voice_until_close():
+    engine = pyttsx3.init()
+    engine.setProperty('rate', 150) 
+    def on_end(name, completed):
+        if completed:
+            engine.stop()
+    engine.connect('finished-utterance', on_end)
+    while True:
+        engine.say("All job is done")
+        engine.runAndWait()
+        if messagebox.askokcancel("Selesai", "Semua file telah diproses dan diupload. Klik OK untuk selesai."):
+            break
+    engine.stop()
 
 def process_files():
     tanggal1 = entry_tanggal1.get()
@@ -332,13 +372,13 @@ def process_files():
         return
 
     remote_folder = select_remote_folder(session, session.headers) 
+    print(f"Processing {len(identifiers)}")
     for (no_rawat,) in identifiers:
         pdf_path = generate_pdf(username, password, no_rawat, cookies, folder_pdf)
         if pdf_path:
             preload_js_assets(session)
             upload_file(session, session.headers, pdf_path, remote_folder)
-    messagebox.showinfo("Selesai", "Semua file telah diproses dan diupload.")
-
+    play_voice_until_close()
 
 app = Tk()
 app.title("PDF Generator dan Upload")

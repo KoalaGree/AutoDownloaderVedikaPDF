@@ -1,15 +1,32 @@
 # Downloader Vedika
 
+## License
+
+This project is licensed under the Aladdin Free Public License (AFPL).  
+You may use, copy, and distribute it for **non-commercial purposes only**.  
+See the [LICENSE](LICENSE) file for full terms.
+
 ## Pemasangan Pemula 
-1. Install Python di komputer anda / jika sudah lanjutkan ke langkah ke 2
-2. Download AutoDownloader atau dengan salin kode dibawah dan paste pada CMD ( Pastikan CMD berada di folder yang ingin di pasang. Contoh : C:\Users\Fahri\Documents\PDF)
+1. Install Python dan Wkhtmltopdf di komputer anda jika belum terinstall
+2. Download AutoDownloader.zip yang sudah release
+3. Extract Autodownloader.zip
+4. Rubah app.config dan sesuaikan dengan kebutuhan
 ```
-git clone https://github.com/KoalaGree/AutoDownloaderVedikaPDF.git
+[Database]
+Host = [host]
+Port = [port] 
+Database = [namadb]
+User = [user]
+Password = [password]
+
+[Paths]
+base_path = [Path Shared Folder, Contoh : /SHARED/NamaRS/SomeFolder]
+path_wkthmltopdf = C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe <!--  Path WKHtmlToPdf -->
+
+[Urls]
+jknurl = https://jkn-drive.bpjs-kesehatan.go.id <!--  URL JKN DRIVE -->
+mlite = https://url-rs.com <!--  URL SIMRS/MLITE -->
 ```
-Atau
-```
-curl -LO https://github.com/KoalaGree/AutoDownloaderVedikaPDF/archive/refs/heads/main.zip -o AutoDownloaderVedikaPDF.zip
-```
-3. Extract AutoDownloaderVedikaPDF.zip 
-4. Jalankan Setup.bat untuk menginstall kebutuhan library python
-5. Aplikasi siap digunakan dengan menjalankan Aplikasi.bat
+5. Jalankan main.exe
+
+

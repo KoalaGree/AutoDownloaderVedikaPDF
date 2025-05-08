@@ -1,18 +1,26 @@
+# This file is part of AutoDownloaderVedikaPDF.
+# Copyright (C) 2025 Andy Cahyono Putra
+# This program is distributed under the Aladdin Free Public License.
+# See LICENSE file for more information.
+
 import requests
 import json
 from tkinter import Tk, Label, Entry, Button, messagebox
+from config_loader import Config
+
+cfg = Config()
 
 def get_site_cookie(session):
     # Fungsi ini harus mengembalikan cookie awal yang diperlukan untuk autentikasi
     try:
-        response = session.get("http://192.168.1.50/admin/")
+        response = session.get(f'{cfg.Url.mlite}/admin/')
         return response.cookies.get_dict()  # Mengembalikan cookie sebagai dictionary
     except Exception as e:
         return str(e)
 
 def auth(username, password):
     try:
-        url = "http://192.168.1.50/admin/"
+        url = f'{cfg.Url.mlite}/admin/'
         payload = {
             'username': username,
             'password': password,

@@ -16,3 +16,12 @@ TesFolder
 main.py
 AutoDownloaderVedikaPDF.zip
 HtmlResponse.txt
+output/
+credentials.json
+Email.py
+oAuth2.py
+token.json
+Scripts/sender.py
+Scripts/TesRanap.py
+Scripts/sound.py
+Develope
