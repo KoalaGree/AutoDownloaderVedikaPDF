@@ -17,7 +17,8 @@ from requests_toolbelt.multipart.encoder import MultipartEncoder
 from Scripts import auth  
 from config_loader import Config
 import pyttsx3
-
+import subprocess
+import sys
 
 
 cfg = Config()
@@ -173,11 +174,9 @@ def fetch_identifiers(tanggal1):
     conn = mysql.connector.connect(host=cfg.Database.host, user=cfg.Database.user, password=cfg.Database.password, database=cfg.Database.database)
     cursor = conn.cursor()
     query = f"""
-        SELECT mlite_vedika.no_rawat 
-                FROM mlite_vedika 
-                WHERE mlite_vedika.tgl_registrasi LIKE '{tanggal1}'
-                AND jenis = '2'
-                AND mlite_vedika.status = 'Pengajuan'
+        SELECT * FROM mlite_vedika WHERE status = 'Pengajuan' 
+        AND jenis = '2' AND (no_rkm_medis OR no_rawat OR nosep ) 
+        AND tgl_registrasi BETWEEN '{tanggal1}' AND '{tanggal1}'
     """
     cursor.execute(query)
     results = cursor.fetchall()
@@ -330,6 +329,10 @@ def play_voice_until_close():
             break
     engine.stop()
 
+def kembali_ke_menu():
+    app.destroy()  # Tutup jendela ini
+    subprocess.Popen([sys.executable, "main.py"])  # Jalankan ulang main.py
+
 def process_files():
     tanggal1 = entry_tanggal1.get()
     username = entry_username.get()
@@ -417,5 +420,6 @@ Button(app, text="Ambil Cookies", command=ambil_cookies).grid(row=7, column=3)
 
 
 Button(app, text="Proses", command=process_files).grid(row=8, column=1, pady=20)
+Button(app, text="⬅ Kembali ke Menu Utama", command=kembali_ke_menu).grid(row=8, column=2, pady=20)
 
 app.mainloop()

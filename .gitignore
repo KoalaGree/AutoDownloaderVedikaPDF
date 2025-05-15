@@ -8,7 +8,6 @@ package.json
 launch.json
 Jkn.py
 Jknv2.py
-main.py
 tes.py
 tess.py
 Scripts/TesRanap.py
@@ -24,3 +23,7 @@ Scripts/sender.py
 Scripts/TesRanap.py
 Scripts/sound.py
 Develope
+run/
+main/
+run.py
+__pycache__/config_loader.cpython-38.pyc

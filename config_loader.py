@@ -9,6 +9,7 @@ class Config:
         self.Database = self.DatabaseConfig(self.config)
         self.Paths = self.PathsConfig(self.config)
         self.Url = self.UrlConfig(self.config)
+        self.UserPass = self.UserPassConfig(self.config)
 
     class DatabaseConfig:
         def __init__(self, config):
@@ -27,3 +28,8 @@ class Config:
         def __init__(self, config):
             self.jkn = config['Url'].get('jknurl')
             self.mlite = config['Url'].get('mlite')
+
+    class UserPassConfig:
+        def __init__(self, config):
+            self.username = config['UserPass'].get('USERNAME')
+            self.password = config['UserPass'].get('PASSWORD')

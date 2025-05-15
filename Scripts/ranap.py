@@ -17,6 +17,8 @@ from requests_toolbelt.multipart.encoder import MultipartEncoder
 from Scripts import auth  
 from config_loader import Config
 import pyttsx3
+import subprocess
+import sys
 
 
 cfg = Config()
@@ -168,15 +170,14 @@ def select_remote_folder(session, headers, base_path=cfg.Paths.base_path):
     return selected_path
 
 
-def fetch_identifiers(tanggal1, tanggal2):
+def fetch_identifiers(tanggal1):
     conn = mysql.connector.connect(host=cfg.Database.host, user=cfg.Database.user, password=cfg.Database.password, database=cfg.Database.database)
     cursor = conn.cursor()
     query = f"""
-        SELECT no_rawat FROM mlite_vedika 
-        WHERE STATUS = 'Pengajuan' AND jenis = '1' 
-        AND no_rawat IN (
-            SELECT no_rawat FROM kamar_inap 
-            WHERE tgl_keluar BETWEEN '{tanggal1}' AND '{tanggal2}' AND kamar_inap.stts_pulang LIKE '%%')
+        SELECT * FROM mlite_vedika WHERE status = 'Pengajuan' AND jenis = '1' 
+        AND (no_rkm_medis OR no_rawat OR nosep) 
+        AND no_rawat IN (SELECT no_rawat FROM kamar_inap WHERE tgl_keluar BETWEEN '{tanggal1}' AND '{tanggal1}' AND kamar_inap.stts_pulang LIKE '%%')
+
     """
     cursor.execute(query)
     results = cursor.fetchall()
@@ -329,10 +330,13 @@ def play_voice_until_close():
             break
     engine.stop()
 
+def kembali_ke_menu():
+    app.destroy()  # Tutup jendela ini
+    subprocess.Popen([sys.executable, "main.py"])  # Jalankan ulang main.py
+
 
 def process_files():
     tanggal1 = entry_tanggal1.get()
-    tanggal2 = entry_tanggal2.get()
     username = entry_username.get()
     password = entry_password.get()
     usernameJKN = entry_usernamejkn.get()
@@ -343,7 +347,7 @@ def process_files():
     if not os.path.exists(folder_pdf):
         os.makedirs(folder_pdf)
 
-    identifiers = fetch_identifiers(tanggal1, tanggal2)
+    identifiers = fetch_identifiers(tanggal1)
     if not identifiers:
         messagebox.showerror("Error", "Tanggal awal dan tanggal akhir harus diisi.")
         return
@@ -391,38 +395,35 @@ Label(app, text="Tanggal Awal:").grid(row=0, column=0, sticky='e')
 entry_tanggal1 = Entry(app)
 entry_tanggal1.grid(row=0, column=1)
 
-Label(app, text="Tanggal Akhir:").grid(row=1, column=0, sticky='e')
-entry_tanggal2 = Entry(app)
-entry_tanggal2.grid(row=1, column=1)
-
-Label(app, text="Username RS: ").grid(row=2, column=0, sticky='e')
+Label(app, text="Username RS: ").grid(row=1, column=0, sticky='e')
 entry_username = Entry(app)
-entry_username.grid(row=2, column=1)
+entry_username.grid(row=1, column=1)
 
-Label(app, text="Password RS:").grid(row=3, column=0, sticky='e')
+Label(app, text="Password RS:").grid(row=2, column=0, sticky='e')
 entry_password = Entry(app, show='*')
-entry_password.grid(row=3, column=1)
+entry_password.grid(row=2, column=1)
 
-Label(app, text="Username Drive:").grid(row=4, column=0, sticky='e')
+Label(app, text="Username Drive:").grid(row=3, column=0, sticky='e')
 entry_usernamejkn = Entry(app)
-entry_usernamejkn.grid(row=4, column=1)
+entry_usernamejkn.grid(row=3, column=1)
 
-Label(app, text="Password Drive:").grid(row=5, column=0, sticky='e')
+Label(app, text="Password Drive:").grid(row=4, column=0, sticky='e')
 entry_passwordjkn = Entry(app, show='*')
-entry_passwordjkn.grid(row=5, column=1)
+entry_passwordjkn.grid(row=4, column=1)
 
-Label(app, text="Folder Simpan PDF:").grid(row=6, column=0, sticky='e')
+Label(app, text="Folder Simpan PDF:").grid(row=5, column=0, sticky='e')
 entry_folder = Entry(app)
-entry_folder.grid(row=6, column=1)
-Button(app, text="Pilih Folder", command=lambda: entry_folder.insert(0, filedialog.askdirectory())).grid(row=6, column=2)
+entry_folder.grid(row=5, column=1)
+Button(app, text="Pilih Folder", command=lambda: entry_folder.insert(0, filedialog.askdirectory())).grid(row=5, column=2)
 
-Label(app, text="Cookies File:").grid(row=7, column=0, sticky='e')
+Label(app, text="Cookies File:").grid(row=6, column=0, sticky='e')
 entry_cookies = Entry(app)
-entry_cookies.grid(row=7, column=1)
-Button(app, text="Pilih Cookies", command=select_cookies).grid(row=7, column=2)
-Button(app, text="Ambil Cookies", command=ambil_cookies).grid(row=7, column=3)
+entry_cookies.grid(row=6, column=1)
+Button(app, text="Pilih Cookies", command=select_cookies).grid(row=6, column=2)
+Button(app, text="Ambil Cookies", command=ambil_cookies).grid(row=6, column=3)
 
-Button(app, text="Proses", command=process_files).grid(row=8, column=1, pady=20)
+Button(app, text="Proses", command=process_files).grid(row=7, column=1, pady=20)
+Button(app, text="⬅ Kembali ke Menu Utama", command=kembali_ke_menu).grid(row=7, column=2, pady=20)
 
 
 app.mainloop()
