@@ -26,6 +26,12 @@ path_wkthmltopdf = C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe <!--  Path W
 [Urls]
 jknurl = https://jkn-drive.bpjs-kesehatan.go.id <!--  URL JKN DRIVE -->
 mlite = https://url-rs.com <!--  URL SIMRS/MLITE -->
+
+<!--  UsernamePassword JKNDrive -->
+[UserPass]
+USERNAME = 
+PASSWORD = 
+
 ```
 5. Jalankan main.exe
 
