@@ -27,3 +27,9 @@ run/
 main/
 run.py
 __pycache__/config_loader.cpython-38.pyc
+composer.lock
+composer.json
+generate_pdf.php
+vendor/
+AutoDownloaderVedikaPDFf.zip
+AutoDownloaderVedikaPD12F.zip

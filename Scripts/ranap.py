@@ -7,7 +7,6 @@ import os
 import requests
 import re
 from bs4 import BeautifulSoup
-import pdfkit
 from tkinter import Tk, Label, Entry, Button, filedialog, messagebox, simpledialog, Listbox, Scrollbar, Toplevel
 import mysql.connector
 from urllib.parse import quote_plus
@@ -19,10 +18,19 @@ from config_loader import Config
 import pyttsx3
 import subprocess
 import sys
+from playwright.sync_api import sync_playwright
+
 
 
 cfg = Config()
-config = pdfkit.configuration(wkhtmltopdf=cfg.Paths.wkhtmlfolder)
+
+def render_pdf_with_playwright(html_content, output_path):
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.set_content(html_content, wait_until='networkidle')
+        page.pdf(path=output_path, format='A4', print_background=True)
+        browser.close()
 
 def get_epochtimes():
     return int(datetime.now().timestamp())
@@ -128,8 +136,6 @@ def select_remote_folder(session, headers, base_path=cfg.Paths.base_path):
     selected_path = None
     current_path = base_path
     folder_entries = []
-
-    # Create window for folder selection
     win = Toplevel(app)
     win.title("Pilih Folder Upload")
 
@@ -144,29 +150,17 @@ def select_remote_folder(session, headers, base_path=cfg.Paths.base_path):
         nonlocal selected_path
         selected_path = current_path
         win.destroy()
-
-    # Navigation Buttons
     Button(win, text="Kembali", command=go_back).pack(pady=5)
-
     scrollbar = Scrollbar(win)
     scrollbar.pack(side='right', fill='y')
-
     listbox = Listbox(win, yscrollcommand=scrollbar.set, width=50)
     listbox.pack()
     scrollbar.config(command=listbox.yview)
-
-    # Double-click event binding
     listbox.bind("<Double-1>", on_select)
-
     Button(win, text="Pilih Folder Ini", command=choose_folder).pack(pady=5)
-
-    # Button to create new folder
     Button(win, text="Buat Folder Baru", command=create_new_folder).pack(pady=5)
-
-    # Load folder at the current path
     refresh_folder(current_path)
     win.wait_window()
-
     return selected_path
 
 
@@ -174,7 +168,7 @@ def fetch_identifiers(tanggal1):
     conn = mysql.connector.connect(host=cfg.Database.host, user=cfg.Database.user, password=cfg.Database.password, database=cfg.Database.database)
     cursor = conn.cursor()
     query = f"""
-        SELECT * FROM mlite_vedika WHERE status = 'Pengajuan' AND jenis = '1' 
+        SELECT no_rawat FROM mlite_vedika WHERE status = 'Pengajuan' AND jenis = '1' 
         AND (no_rkm_medis OR no_rawat OR nosep) 
         AND no_rawat IN (SELECT no_rawat FROM kamar_inap WHERE tgl_keluar BETWEEN '{tanggal1}' AND '{tanggal1}' AND kamar_inap.stts_pulang LIKE '%%')
 
@@ -188,7 +182,7 @@ def fetch_identifiers(tanggal1):
 def generate_pdf(username, password, no_rawat, cookies, path_folder):
     try:
         modified_string = no_rawat.replace("/", "")
-        url = f"{cfg.Url.mlite}/admin/vedika/pdf/{modified_string}"
+        url = f'{cfg.Url.mlite}/admin/vedika/pdf/{modified_string}'
 
         payload = f'username={username}&password={password}&login='
         headers = {
@@ -206,36 +200,36 @@ def generate_pdf(username, password, no_rawat, cookies, path_folder):
         }
 
         response = requests.post(url, headers=headers, data=payload)
+        html = response.text
 
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            tr_element = soup.find('tr', class_='isi-norawat')
+        with open(f"debug_{modified_string}.html", "w", encoding="utf-8") as f:
+            f.write(html)
 
-            if tr_element:
-                script_elements = soup.find_all('script')
-                no_sep_value = None
+        soup = BeautifulSoup(html, 'html.parser')
+        no_sep_value = None
+        no_sep_text = soup.find(text=re.compile(r'No[.\s]?SEP[:：]?'))
+        if no_sep_text:
+            match = re.search(r'No\.SEP:\s*(\S+)', no_sep_text)
+            if match:
+                no_sep_value = match.group(1).replace('"', '')
 
-                for script in script_elements:
-                    if 'No.SEP' in script.text:
-                        match = re.search(r'No\.SEP:\s*(\S+)', script.text)
-                        if match:
-                            no_sep_value = match.group(1).replace('"', '')
-                            break
+        if not no_sep_value:
+            return f"No.SEP tidak ditemukan untuk {no_rawat}"
 
-                if no_sep_value:
-                    pdf_filename = f'{no_sep_value}.pdf'
-                    pdf_path = os.path.normpath(os.path.join(path_folder, pdf_filename))
-                    path_new = pdf_path.replace("\\", "/")
+        filename = f"{no_sep_value}.pdf"
+        final_pdf = os.path.join(path_folder, filename)
+        temp_filename = filename.replace(".pdf", "_temp.pdf")
+        temp_pdf = os.path.join(path_folder, temp_filename)
 
-                    # Generate PDF
-                    pdfkit.from_string(response.text, pdf_path, configuration=config)
-                    return path_new
-                else:
-                    return f"No.SEP tidak ditemukan di {url}"
-            else:
-                return 'Element <tr class="isi-norawat"> tidak ditemukan'
-        else:
-            return f'Error: Received status code {response.status_code} for URL: {url}'
+        render_pdf_with_playwright(html, temp_pdf)
+
+        result = subprocess.run(['qpdf', '--decode-level=generalized', temp_pdf, final_pdf], capture_output=True, text=True)
+        os.remove(temp_pdf)
+
+        if result.returncode != 0:
+            return f"qpdf error untuk {no_sep_value}: {result.stderr}"
+
+        return f"PDF siap: {final_pdf}"
     except Exception as e:
         return f'An error occurred: {e}'
 
@@ -388,7 +382,7 @@ def process_files():
 
 
 app = Tk()
-app.title("PDF Generator dan Upload")
+app.title("Downloader dan Uploader PDF JKN DRIVE ( Ranap )")
 app.geometry("500x400")
 
 Label(app, text="Tanggal Awal:").grid(row=0, column=0, sticky='e')

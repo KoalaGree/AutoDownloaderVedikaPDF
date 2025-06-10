@@ -6,8 +6,15 @@ This project is licensed under the Aladdin Free Public License (AFPL).
 You may use, copy, and distribute it for **non-commercial purposes only**.  
 See the [LICENSE](LICENSE) file for full terms.
 
+
 ## Pemasangan Pemula 
-1. Install Python dan Wkhtmltopdf di komputer anda jika belum terinstall
+1. Install Python dan qpdf di komputer anda jika belum terinstall
+```
+https://github.com/qpdf/qpdf/releases
+
+```
+Note : Pastikan PATH qpdf sudah tertambah
+
 2. Download AutoDownloader.zip yang sudah release
 3. Extract Autodownloader.zip
 4. Rubah app.config dan sesuaikan dengan kebutuhan
@@ -21,7 +28,6 @@ Password = [password]
 
 [Paths]
 base_path = [Path Shared Folder, Contoh : /SHARED/NamaRS/SomeFolder]
-path_wkthmltopdf = C:/Program Files/wkhtmltopdf/bin/wkhtmltopdf.exe <!--  Path WKHtmlToPdf -->
 
 [Urls]
 jknurl = https://jkn-drive.bpjs-kesehatan.go.id <!--  URL JKN DRIVE -->
@@ -33,6 +39,4 @@ USERNAME =
 PASSWORD = 
 
 ```
-5. Jalankan main.exe
-
-
+5. Jalankan main.exe 
